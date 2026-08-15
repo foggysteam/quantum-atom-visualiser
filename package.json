@@ -1,0 +1,61 @@
+{
+  "name": "quantum-atom-visualiser",
+  "version": "1.0.0",
+  "description": "A physically honest atomic renderer: real quantum wavefunctions, volumetric |psi|^2, correct scale, and an explicit account of where the model breaks down.",
+  "//private": "This is an application, not a library. Keeping private:true blocks an accidental `npm publish` while having no effect on cloning, building or hosting.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "author": "foggysteam",
+  "homepage": "https://github.com/foggysteam/quantum-atom-visualiser#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/foggysteam/quantum-atom-visualiser.git"
+  },
+  "bugs": {
+    "url": "https://github.com/foggysteam/quantum-atom-visualiser/issues"
+  },
+  "keywords": [
+    "quantum-mechanics",
+    "atomic-orbitals",
+    "wavefunction",
+    "schrodinger",
+    "volume-rendering",
+    "raymarching",
+    "webgl",
+    "threejs",
+    "physics",
+    "chemistry",
+    "education",
+    "scientific-visualization",
+    "electrical-conduction",
+    "drude-model",
+    "periodic-table"
+  ],
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "audit": "npm audit --audit-level=moderate"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "three": "^0.171.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@types/three": "^0.171.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "typescript": "^5.7.2",
+    "vite": "^6.4.3",
+    "vitest": "^3.2.7"
+  }
+}

@@ -1,0 +1,31 @@
+# Normalise line endings so contributors on different operating systems do not
+# produce whole-file diffs. Text files are stored with LF in the repository and
+# checked out with each platform's native ending.
+* text=auto
+
+# Always LF for these, regardless of platform. Shell scripts and configuration
+# read by tooling can misbehave with CRLF.
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.js   text eol=lf
+*.jsx  text eol=lf
+*.json text eol=lf
+*.css  text eol=lf
+*.html text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.sh   text eol=lf
+
+# Binary assets: never touch these.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.woff binary
+*.woff2 binary
+
+# Keep the lockfile out of diff noise and mark it generated on GitHub.
+package-lock.json linguist-generated=true -diff

@@ -1,0 +1,1193 @@
+:root {
+  --bg: #06080d;
+  --panel: rgba(14, 18, 26, 0.82);
+  --panel-solid: #0e121a;
+  --border: rgba(255, 255, 255, 0.09);
+  --text: #dfe6f0;
+  --text-dim: #8b97a8;
+  --text-faint: #5d6878;
+  --accent: #4fc3f7;
+  --accent-warm: #ffa63d;
+  --warn: #ffb454;
+  --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+
+  /*
+   * HUD scale. Applied with `zoom` on the panels rather than by scaling every
+   * font size individually, so padding, borders, control sizes and the periodic
+   * table cells all grow together and the layout stays proportioned.
+   *
+   * Deliberately not applied to the canvas: the 3D view keeps rendering at
+   * native device resolution regardless of how large the controls are.
+   */
+  --ui-scale: 1;
+
+  /* Overwritten at runtime by App.tsx with the bars' measured heights. */
+  --top-bar-height: 34px;
+  --bottom-bar-height: 0px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 13px;
+  overflow: hidden;
+}
+
+.app {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+canvas.viewport {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  cursor: grab;
+}
+
+canvas.viewport:active {
+  cursor: grabbing;
+}
+
+/* ---------- panels ---------- */
+
+.panel {
+  position: absolute;
+  background: var(--panel);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 14px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
+  zoom: var(--ui-scale);
+}
+
+.panel::-webkit-scrollbar {
+  width: 8px;
+}
+.panel::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 4px;
+}
+
+/*
+ * Percentages inside a zoomed element resolve against the UNZOOMED containing
+ * block and are then scaled by the zoom, so a plain `100%` overflows the
+ * viewport by exactly the zoom factor. Dividing by --ui-scale cancels that.
+ */
+/*
+ * THE RULE FOR POSITIONING INSIDE A ZOOMED ELEMENT, measured rather than
+ * assumed, because getting it backwards is subtle and the symptoms are odd:
+ *
+ *   - PERCENTAGES need no compensation. They already resolve against the
+ *     containing block converted into the zoomed coordinate system, so `100%`
+ *     renders as exactly the containing block. Dividing them by the scale makes
+ *     panels shrink and centred bars drift left as the HUD grows.
+ *   - ABSOLUTE LENGTHS do need it. `14px` inside a 1.75x zoom renders as 24.5
+ *     screen pixels, so a constant screen-space gap has to be written as
+ *     `14px / var(--ui-scale)`.
+ *
+ * So: divide the px terms, leave the percentages alone.
+ *
+ * --top-bar-height is measured at runtime in SCREEN pixels (App.tsx), since the
+ * bar's height depends both on the HUD scale and on whether its buttons wrap.
+ */
+.panel-left {
+  top: calc((22px + var(--top-bar-height)) / var(--ui-scale));
+  left: calc(14px / var(--ui-scale));
+  width: 310px;
+  max-height: calc(100% - (36px + var(--top-bar-height)) / var(--ui-scale));
+}
+
+.panel-right {
+  top: calc((22px + var(--top-bar-height)) / var(--ui-scale));
+  right: calc(14px / var(--ui-scale));
+  width: 290px;
+  max-height: calc(100% - (36px + var(--top-bar-height)) / var(--ui-scale));
+}
+
+.panel h2 {
+  margin: 0 0 3px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.panel h3 {
+  margin: 18px 0 8px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.panel h3:first-of-type {
+  margin-top: 10px;
+}
+
+.subtitle {
+  color: var(--text-dim);
+  font-size: 11px;
+  margin: 0 0 6px;
+}
+
+/* ---------- element header ---------- */
+
+.element-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.element-symbol {
+  font-size: 34px;
+  font-weight: 300;
+  line-height: 1;
+  min-width: 58px;
+  font-family: var(--mono);
+}
+
+.element-meta {
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.55;
+}
+
+.element-meta strong {
+  color: var(--text);
+  font-weight: 500;
+}
+
+/* ---------- element picker ---------- */
+
+.element-grid {
+  display: grid;
+  grid-template-columns: repeat(18, minmax(0, 1fr));
+  gap: 2px;
+  margin-top: 8px;
+  /* Without this the 18 columns take their content width and push the whole
+     panel wide, which turns into a horizontal scrollbar on the panel itself. */
+  min-width: 0;
+}
+
+.element-cell {
+  aspect-ratio: 1;
+  min-width: 0;
+  overflow: hidden;
+  border: none;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-dim);
+  font-size: 8px;
+  font-family: var(--mono);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.12s, color 0.12s;
+}
+
+.element-cell:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--text);
+}
+
+.element-cell.selected {
+  background: var(--accent);
+  color: #04121a;
+  font-weight: 700;
+}
+
+.element-cell:disabled {
+  opacity: 0.2;
+  cursor: not-allowed;
+}
+
+/* The f-block rows sit below a deliberate gap, matching a printed table. */
+.element-cell.f-block {
+  opacity: 0.92;
+}
+
+.element-grid {
+  grid-auto-rows: minmax(0, 1fr);
+}
+
+.f-block-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 6.5px;
+  font-family: var(--mono);
+  color: var(--text-faint);
+  border: 1px dashed rgba(255, 255, 255, 0.18);
+  border-radius: 2px;
+  aspect-ratio: 1;
+}
+
+/* ---------- controls ---------- */
+
+.control {
+  margin-bottom: 11px;
+}
+
+.control-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 11px;
+  color: var(--text-dim);
+  margin-bottom: 4px;
+}
+
+.control-value {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
+}
+
+input[type="range"] {
+  width: 100%;
+  height: 3px;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 2px;
+  outline: none;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--panel-solid);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--panel-solid);
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 0;
+  cursor: pointer;
+  font-size: 12px;
+  user-select: none;
+}
+
+.toggle input {
+  appearance: none;
+  width: 30px;
+  height: 16px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.14);
+  position: relative;
+  cursor: pointer;
+  transition: background 0.15s;
+  flex-shrink: 0;
+  margin: 0;
+}
+
+.toggle input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.15s;
+}
+
+.toggle input:checked {
+  background: var(--accent);
+}
+
+.toggle input:checked::after {
+  transform: translateX(14px);
+}
+
+.toggle .hint {
+  color: var(--text-faint);
+  font-size: 10px;
+}
+
+.segmented {
+  display: flex;
+  gap: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 3px;
+  border-radius: 6px;
+}
+
+.segmented button {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  padding: 5px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  transition: background 0.12s, color 0.12s;
+}
+
+.segmented button.active {
+  background: rgba(255, 255, 255, 0.14);
+  color: var(--text);
+}
+
+button.action {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  padding: 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  transition: background 0.12s;
+}
+
+button.action:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* ---------- orbital list ---------- */
+
+.orbital-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.mini-action {
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-dim);
+  border-radius: 4px;
+  padding: 3px 9px;
+  font-size: 10px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.mini-action:hover {
+  background: rgba(255, 255, 255, 0.13);
+  color: var(--text);
+}
+
+.orbital-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.solo-button {
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 9px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 2px 5px;
+  border-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.orbital-row:hover .solo-button {
+  opacity: 1;
+}
+
+.solo-button:hover {
+  background: rgba(79, 195, 247, 0.2);
+  color: var(--accent);
+}
+
+.orbital-row:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.orbital-row.hidden-shell {
+  opacity: 0.36;
+}
+
+.orbital-name {
+  font-family: var(--mono);
+  min-width: 34px;
+}
+
+.orbital-bar {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.orbital-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+}
+
+.orbital-count {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  min-width: 34px;
+  text-align: right;
+}
+
+/* ---------- readouts ---------- */
+
+.readout {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 11px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+}
+
+.readout:last-child {
+  border-bottom: none;
+}
+
+.readout span:first-child {
+  color: var(--text-dim);
+}
+
+.readout span:last-child {
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+.note {
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--text-faint);
+  background: rgba(255, 255, 255, 0.035);
+  border-left: 2px solid var(--warn);
+  padding: 8px 10px;
+  border-radius: 0 4px 4px 0;
+  margin-top: 10px;
+}
+
+.note.accent {
+  border-left-color: var(--accent);
+}
+
+.note.warn {
+  border-left-color: #ff6b6b;
+  background: rgba(255, 107, 107, 0.07);
+  color: #f0c7c7;
+}
+
+/* ---------- bottom bar ---------- */
+
+.bottom-bar {
+  position: absolute;
+  bottom: calc(14px / var(--ui-scale));
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: var(--panel);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 16px;
+  max-width: calc(100% - 640px / var(--ui-scale));
+  zoom: var(--ui-scale);
+}
+
+.scale-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+}
+
+.scale-bar-line {
+  height: 6px;
+  border-left: 1px solid var(--text);
+  border-right: 1px solid var(--text);
+  border-bottom: 1px solid var(--text);
+}
+
+.scale-bar-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.zoom-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 260px;
+}
+
+.zoom-control input {
+  flex: 1;
+}
+
+.zoom-label {
+  font-size: 10px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  font-family: var(--mono);
+}
+
+.exaggeration-badge {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 4px 9px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.exaggeration-badge.true-scale {
+  background: rgba(79, 195, 247, 0.14);
+  color: var(--accent);
+}
+
+.exaggeration-badge.exaggerated {
+  background: rgba(255, 180, 84, 0.14);
+  color: var(--warn);
+}
+
+.convergence {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text-faint);
+  white-space: nowrap;
+  min-width: 74px;
+}
+
+/* ---------- radial plot ---------- */
+
+.radial-plot {
+  width: 100%;
+  height: 118px;
+  display: block;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.plot-legend {
+  display: flex;
+  gap: 12px;
+  font-size: 10px;
+  color: var(--text-faint);
+  margin-top: 5px;
+  flex-wrap: wrap;
+}
+
+.plot-legend span {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.swatch {
+  width: 9px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.plot-caption {
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--text-faint);
+  margin-top: 5px;
+}
+
+/* ---------- reality check ---------- */
+
+.check-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 12px;
+  font-size: 12px;
+}
+
+.check-name {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.grade {
+  font-size: 8.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-family: var(--mono);
+}
+
+.grade-exact {
+  background: rgba(126, 231, 135, 0.16);
+  color: #7ee787;
+}
+
+.grade-good {
+  background: rgba(79, 195, 247, 0.16);
+  color: var(--accent);
+}
+
+.grade-fair {
+  background: rgba(255, 180, 84, 0.16);
+  color: var(--warn);
+}
+
+.grade-poor {
+  background: rgba(255, 138, 107, 0.16);
+  color: #ff8a6b;
+}
+
+.grade-note {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-faint);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.node-chip.chip-warn {
+  background: rgba(255, 138, 107, 0.14);
+  color: #ff8a6b;
+}
+
+.check-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 5px;
+}
+
+.node-chip {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--text-dim);
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+
+.evidence {
+  margin-top: 10px;
+  padding-left: 10px;
+  border-left: 2px solid rgba(255, 255, 255, 0.12);
+}
+
+.evidence-title {
+  font-size: 11px;
+  color: var(--text);
+  margin-bottom: 3px;
+}
+
+.evidence-body {
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--text-faint);
+}
+
+/* ---------- panel visibility ---------- */
+
+.top-bar {
+  position: absolute;
+  /* De-zoomed so the bar stays a constant 14 screen pixels from the top at any
+     HUD scale. The panels' clearance calculation assumes exactly that. */
+  top: calc(14px / var(--ui-scale));
+  /* Plain 50%: percentages already resolve correctly under zoom. See panel-left. */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  zoom: var(--ui-scale);
+}
+
+.panel-toggle {
+  background: var(--panel);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.panel-toggle:hover {
+  color: var(--text);
+}
+
+.mode-switch {
+  display: flex;
+  gap: 3px;
+  background: var(--panel);
+  backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.mode-switch button {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  padding: 4px 13px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 11px;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.mode-switch button.active {
+  background: var(--accent);
+  color: #04121a;
+  font-weight: 600;
+}
+
+.size-switch button {
+  padding: 4px 9px;
+  font-family: var(--mono);
+  min-width: 26px;
+}
+
+/* ---------- conduction view ---------- */
+
+.material-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.material-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-dim);
+  border-radius: 6px;
+  padding: 7px 4px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.12s, color 0.12s;
+}
+
+.material-cell:hover {
+  background: rgba(255, 255, 255, 0.11);
+  color: var(--text);
+}
+
+.material-cell.selected {
+  background: var(--accent);
+  color: #04121a;
+}
+
+.material-symbol {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.material-class {
+  font-size: 8.5px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
+
+.readout.big {
+  padding: 6px 0;
+  font-size: 12px;
+}
+
+.readout.big span:last-child {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.compare-table {
+  margin-top: 6px;
+  font-size: 10.5px;
+}
+
+.compare-row {
+  display: grid;
+  grid-template-columns: 34px 74px 1fr;
+  gap: 6px;
+  align-items: center;
+  padding: 3px 4px;
+  border-radius: 3px;
+}
+
+.compare-row.compare-head {
+  color: var(--text-faint);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.compare-row.active {
+  background: rgba(79, 195, 247, 0.13);
+}
+
+.compare-row span:first-child {
+  font-family: var(--mono);
+  color: var(--text);
+}
+
+.compare-row span:nth-child(2) {
+  font-family: var(--mono);
+  color: var(--text-dim);
+}
+
+.compare-bar-cell {
+  display: block;
+  height: 5px;
+  background: rgba(255, 255, 255, 0.07);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.compare-bar {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #4fc3f7, #7ee787);
+  border-radius: 3px;
+}
+
+.app.panels-hidden .panel,
+.app.panels-hidden .bottom-bar {
+  display: none;
+}
+
+/*
+ * The bottom bar sits between two fixed-width panels, so below a certain width
+ * there is no room for it and it has to move below them instead.
+ *
+ * Driven by data attributes set in App.tsx rather than by media queries: media
+ * queries see the raw viewport width, which is the wrong number once the HUD is
+ * zoomed. See the comment there.
+ */
+:root[data-narrow] .bottom-bar {
+  left: calc(14px / var(--ui-scale));
+  right: calc(14px / var(--ui-scale));
+  transform: none;
+  max-width: none;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
+}
+
+:root[data-narrow] .panel-left,
+:root[data-narrow] .panel-right {
+  max-height: calc(100% - (36px + var(--top-bar-height)) / var(--ui-scale) - var(--bottom-bar-height));
+}
+
+:root[data-tight] .panel-left,
+:root[data-tight] .panel-right {
+  width: 46%;
+}
+
+/* ---------------------------------------------------------------------------
+ * Phone layout.
+ *
+ * Two side panels cannot work here: at 375px they leave about two pixels of
+ * canvas between them. So the canvas takes the whole screen and the controls
+ * become a bottom sheet with tabs, one panel visible at a time.
+ *
+ * The panels keep their existing markup and simply get repositioned, which
+ * avoids maintaining a second copy of every control.
+ * ------------------------------------------------------------------------ */
+
+:root[data-mobile] .panel {
+  position: fixed;
+  top: auto;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  /*
+   * vh is a LENGTH, not a percentage, so zoom scales it: a plain `58vh` under
+   * an XL HUD renders at 101vh and the sheet runs off the screen. Percentages
+   * would need no such division; viewport units do.
+   */
+  height: calc(58vh / var(--ui-scale));
+  border-radius: 14px 14px 0 0;
+  border-left: none;
+  border-right: none;
+  border-bottom: none;
+  z-index: 30;
+}
+
+/* Only the selected tab's panel is mounted visually. */
+:root[data-mobile][data-mobile-tab='render'] .panel-left,
+:root[data-mobile][data-mobile-tab='element'] .panel-right {
+  display: none;
+}
+
+:root[data-mobile][data-sheet='closed'] .panel {
+  display: none;
+}
+
+/* The bottom bar's readouts do not fit a phone and duplicate the sheet. */
+:root[data-mobile] .bottom-bar {
+  display: none;
+}
+
+/*
+ * The top bar keeps its natural size on a phone regardless of HUD scale. The
+ * scale exists to make the physics text readable, not the mode chrome, and at
+ * XL on a 375px screen these three controls wrap onto three rows and eat a
+ * quarter of the viewport.
+ */
+:root[data-mobile] .top-bar {
+  zoom: 1;
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  transform: none;
+  flex-wrap: nowrap;
+  justify-content: center;
+  gap: 5px;
+}
+
+:root[data-mobile] .top-bar .mode-switch button {
+  padding: 4px 9px;
+  font-size: 10.5px;
+}
+
+:root[data-mobile] .top-bar .size-switch button {
+  padding: 4px 6px;
+  min-width: 20px;
+}
+
+:root[data-mobile] .panel-toggle {
+  padding: 5px 9px;
+  font-size: 10.5px;
+}
+
+/* Tab bar and sheet handle, only rendered on mobile. */
+.mobile-sheet-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 31;
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  padding: 7px 10px;
+  background: var(--panel-solid);
+  border-top: 1px solid var(--border);
+  zoom: var(--ui-scale);
+}
+
+:root[data-sheet='open'] .mobile-sheet-bar {
+  bottom: calc(58vh / var(--ui-scale));
+  border-top: none;
+  border-bottom: 1px solid var(--border);
+  border-radius: 14px 14px 0 0;
+}
+
+.mobile-sheet-bar button {
+  flex: 1;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-dim);
+  border-radius: 8px;
+  padding: 9px 6px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.mobile-sheet-bar button.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #04121a;
+  font-weight: 600;
+}
+
+.mobile-sheet-bar button.sheet-toggle {
+  flex: 0 0 54px;
+}
+
+/* Touch targets need to be finger-sized, not mouse-sized. */
+:root[data-mobile] .toggle input {
+  width: 42px;
+  height: 24px;
+}
+
+:root[data-mobile] .toggle input::after {
+  width: 20px;
+  height: 20px;
+}
+
+:root[data-mobile] .toggle input:checked::after {
+  transform: translateX(18px);
+}
+
+:root[data-mobile] input[type='range'] {
+  height: 22px;
+  background: transparent;
+}
+
+:root[data-mobile] input[type='range']::-webkit-slider-thumb {
+  width: 22px;
+  height: 22px;
+}
+
+:root[data-mobile] .element-cell {
+  font-size: 7px;
+}
+
+/* Hover-only affordances have no touch equivalent, so make it always visible. */
+:root[data-mobile] .solo-button {
+  opacity: 1;
+}
+
+/* The canvas must swallow drags, or every orbit gesture scrolls the page. */
+canvas.viewport {
+  touch-action: none;
+}
+
+/*
+ * On a phone the canvas stops where the sheet begins, rather than running full
+ * height behind it. Otherwise the atom is centred in the full viewport and ends
+ * up hidden underneath the controls.
+ *
+ * The sheet renders at exactly 58vh (its height is de-zoomed, see above), so
+ * these raw viewport units line up with it. The canvas itself is never zoomed.
+ */
+/*
+ * The height is computed explicitly rather than left to `auto` plus a bottom
+ * offset. A <canvas> has an intrinsic aspect ratio taken from its width and
+ * height ATTRIBUTES, which the renderer sets from the element's CSS size, so
+ * `height: auto` feeds the canvas its own dimensions and it grows without bound.
+ */
+:root[data-mobile] canvas.viewport {
+  top: 0;
+  height: calc(100% - var(--sheet-bar-height, 44px));
+}
+
+:root[data-mobile][data-sheet='open'] canvas.viewport {
+  height: calc(100% - 58vh - var(--sheet-bar-height, 44px));
+}
+
+/* ---------- desktop-is-better notice ---------- */
+
+.mobile-notice {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 60;
+  width: min(340px, calc(100vw - 40px));
+  background: var(--panel-solid);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 18px;
+  text-align: center;
+}
+
+.mobile-notice h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.mobile-notice p {
+  margin: 0 0 14px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-dim);
+}
+
+.mobile-notice button {
+  width: 100%;
+  border: none;
+  background: var(--accent);
+  color: #04121a;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.mobile-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  z-index: 59;
+}
+
+.error-banner {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  max-width: 520px;
+  background: #1a1013;
+  border: 1px solid #63343c;
+  border-radius: 8px;
+  padding: 20px 24px;
+  color: #f0d5d8;
+  line-height: 1.6;
+}
